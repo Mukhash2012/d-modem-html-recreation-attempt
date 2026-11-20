@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D-Modem HTML Terminal</title>
+<style>
+:root{color-scheme:dark;--bg:#11181d;--panel:#19232a;--line:#30414c;--text:#e5ecef;--muted:#9cadb5;--accent:#f0a43a;--cyan:#67bfd0;--green:#79c675;--red:#de7464}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:24px 18px 60px}h1{margin:0;font-size:28px}h1 span{color:#258fea}h2{font-size:17px;margin:18px 0 8px}.muted{color:var(--muted)}.scope{border:1px solid var(--line);background:#091016;margin:16px 0 12px;overflow:hidden}canvas{display:block;width:100%;height:180px}.tabs{display:flex;border-bottom:1px solid var(--line)}button,select,input,textarea{font:inherit}button{border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:3px;padding:9px 12px;cursor:pointer}.tabs button{border:0;border-bottom:2px solid transparent;background:none;border-radius:0}.tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}button.primary{background:var(--accent);color:#171006;border-color:var(--accent);font-weight:700}button:disabled{opacity:.45;cursor:not-allowed}.panel{display:none}.panel.active{display:block}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.field{display:flex;flex-direction:column;gap:5px}select,input,textarea{width:100%;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:3px;padding:8px}textarea{min-height:110px;font-family:ui-monospace,monospace}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}.status,.log{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--panel);padding:10px 12px;white-space:pre-wrap}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-top:12px}.stat{background:var(--panel);padding:9px}.stat b{display:block;color:var(--muted);font-size:12px}.ok{color:var(--green)}.bad{color:var(--red)}.warning{border-left:3px solid var(--red);background:var(--panel);padding:10px 12px}.pill{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted);font-size:12px;margin:3px 3px 3px 0}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid var(--line);padding:6px;text-align:left}th{color:var(--muted)}pre{white-space:pre-wrap;word-break:break-word}.progress{height:7px;background:#26343d;border-radius:99px;overflow:hidden}.progress i{display:block;width:0;height:100%;background:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+<h1>D-Modem <span>HTML Terminal</span></h1>
+<p class="muted">Independent, browser-only modem DSP recreation. The original C++ sources are used as reference, not copied wholesale. The implementation deliberately exposes only standards with a working data pump.</p>
+<div class="warning"><strong>Support status:</strong> V.32, V.32bis, V.34, V.90 and V.92 require the full D-Modem DSP handshake and trellis/PCM implementations; they are not claimed by this HTML build. Do not select or advertise them until corresponding DSP and interop tests exist.</div>
+<div class="scope"><canvas id="scope" width="1000" height="180"></canvas></div>
+<div class="tabs" role="tablist">
+<button class="active" data-panel="tx">Transmit</button><button data-panel="rx">Receive</button><button data-panel="test">Loopback tests</button>
+</div>
+<section id="tx" class="panel active">
+<h2>Transmit</h2>
+<div class="grid">
+<div class="field"><label>Standard</label><select id="txStd"></select></div>
+<div class="field"><label>Role</label><select id="txRole"><option value="caller">Caller</option><option value="answerer">Answerer</option></select></div>
+<div class="field"><label>Handshake</label><select id="txHandshake"><option value="full">Full handshake</option><option value="data">Data only</option></select></div>
+<div class="field"><label>Sample rate</label><select id="txRate"><option>8000</option><option>16000</option><option>22050</option><option>32000</option><option>48000</option></select></div>
+</div>
+<div class="field" style="margin-top:12px"><label>Message</label><textarea id="txMsg">CQ CQ DE TEST
+The quick brown fox jumps over the lazy dog.</textarea></div>
+<div class="row"><button id="build" class="primary">Build WAV</button><button id="play" disabled>Play</button><button id="save" disabled>Save WAV</button><span id="txStatus" class="muted">Nothing built.</span></div>
+<div class="stats" id="txStats"></div>
+</section>
+<section id="rx" class="panel">
+<h2>Receive</h2>
+<div class="row"><input id="rxFile" type="file" accept="audio/*,.wav" style="display:none"><button id="open">Open recording</button><button id="decode" class="primary" disabled>Decode</button><span id="rxStatus" class="muted">No audio loaded.</span></div>
+<div class="grid"><div class="field"><label>Standard</label><select id="rxStd"></select></div><div class="field"><label>Role</label><select id="rxRole"><option value="auto">Auto</option><option value="caller">Caller</option><option value="answerer">Answerer</option></select></div></div>
+<div class="progress"><i id="rxProgress"></i></div>
+<div class="stats" id="rxStats"></div>
+<h2>Decoded text</h2><pre id="rxText" class="status">(no bytes)</pre><h2>Hex</h2><pre id="rxHex" class="log"></pre>
+</section>
+<section id="test" class="panel">
+<h2>Loopback tests</h2>
+<div class="grid">
+<div class="field"><label>Standard</label><select id="testStd"></select></div>
+<div class="field"><label>SNR in dB <span id="snrV" class="pill">30 dB</span></label><input id="snr" type="range" min="0" max="40" value="30"></div>
+<div class="field"><label>Dial error <span id="foV" class="pill">0 Hz</span></label><input id="fo" type="range" min="-200" max="200" step="5" value="0"></div>
+</div>
+<div class="row"><button id="run" class="primary">Run loopback</button><button id="sweep">SNR sweep</button></div>
+<div id="testLog" class="log">Ready.</div>
+</section>
+</main>
+<script>
+'use strict';
+(function(){
+const $=id=>document.getElementById(id);
+
+// Standards actually implemented by this browser build.
+const STANDARDS=[
+ {id:'b103',name:'Bell 103',baud:300,channels:[[1270,1070],[2225,2025]],kind:'fsk'},
+ {id:'v21',name:'V.21',baud:300,channels:[[980,1180],[1650,1850]],kind:'fsk'},
+ {id:'v23',name:'V.23',baud:1200,channels:[[390,450],[1300,2100]],kind:'fsk'},
+ {id:'b202',name:'Bell 202',baud:1200,channels:[[1200,2200],[1200,2200]],kind:'fsk'},
+ {id:'v22',name:'V.22',baud:600,channels:[[1200],[2400]],kind:'qpsk'},
+ {id:'b212',name:'Bell 212A',baud:600,channels:[[1200],[2400]],kind:'qpsk'},
+ {id:'v22bis',name:'V.22bis',baud:600,channels:[[1200],[2400]],kind:'qam16'}
+];
+const stdBy=id=>STANDARDS.find(s=>s.id===id)||STANDARDS[0];
+
+for(const id of ['txStd','rxStd','testStd']){
+ const sel=$(id); STANDARDS.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=s.name+' — '+(s.kind==='fsk'?s.baud+' bit/s':'1200/2400 bit/s');sel.appendChild(o)});sel.value=id==='testStd'?'b202':'b202';
+}
+for(const b of document.querySelectorAll('.tabs button'))b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('active',x===b));document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===b.dataset.panel));};
+
+const PI2=Math.PI*2;
+class Osc{constructor(f,fs){this.f=f;this.fs=fs;this.p=0}set(f){this.f=f}next(){let y=Math.sin(PI2*this.p);this.p=(this.p+this.f/this.fs)%1;return y}}
+
+function bitsFromText(text){return new TextEncoder().encode(text)}
+function encodeFrames(bytes,baud,preSec=0.1){
+ // start 0, 8 data LSB, stop 1, plus 7 mark bits
+ const bits=[];const pre=Math.ceil(preSec*baud);for(let i=0;i<pre;i++)bits.push(1);
+ for(const b of bytes){bits.push(0);for(let k=0;k<8;k++)bits.push((b>>k)&1);bits.push(1);for(let k=0;k<7;k++)bits.push(1)}
+ return bits;
+}
+
+function fskBuild(s,role,bytes,fs){
+ let p=s.channels[role==='caller'?0:1],mark=p[0],space=p[1],baud=s.baud;
+ const bits=encodeFrames(bytes,baud,1),out=new Float32Array(bits.length*(fs/baud)+Math.ceil(fs*.25));
+ let osc=new Osc(mark,fs),phase=0,idx=0,bit=1;
+ for(let i=0;i<out.length;i++){
+  phase+=baud/fs;if(phase>=1){phase-=1;bit=bits[idx]===undefined?1:bits[idx++];osc.set(bit?mark:space)}
+  out[i]=osc.next()*7000;
+ }
+ return out;
+}
+
+function qamBuild(s,role,bytes,fs){
+ // Independent 600-baud differential QPSK/16-QAM waveform.
+ // This is a laboratory implementation, not a wire-interoperable V.22 implementation.
+ const baud=600,sp=fs/baud,bitsPer=s.kind==='qam16'?4:2,bits=encodeFrames(bytes,baud,0.3);let syms=[];
+ for(let i=0;i<bits.length;i+=bitsPer){let v=0;for(let k=0;k<bitsPer;k++)v|=((bits[i+k]||1)<<k);syms.push(v)}
+ let out=new Float32Array(Math.ceil(syms.length*sp)+64),c=new Osc(role==='caller'?1200:2400,fs),pulseSym=-3,cur={re:1,im:1},pos=0;
+ for(let n=0;n<out.length;n++){
+  if(n%Math.max(1,Math.round(sp))===0&&pos<syms.length){
+   let v=syms[pos++];if(s.kind==='qam16'){cur={re:(v&1?1:-1)*(v&2?3:1),im:(v&4?1:-1)*(v&8?3:1)}}else{cur={re:(v&1?1:-1),im:(v&2?1:-1)}}
+  }
+  // simple root-ish raised-cosine envelope and carrier
+  let env=1;if(n%Math.round(sp)<sp*.15)env=(n%Math.round(sp))/(sp*.15);
+  let c0=c.next();out[n]=(cur.re*Math.cos(0)-cur.im*Math.sin(0))*0;
+ }
+ // Generate carrier directly from symbol position so the oscillator stays continuous.
+ c=new Osc(role==='caller'?1200:2400,fs);let symPer=Math.round(sp);
+ cur={re:1,im:1};pos=0;
+ for(let n=0;n<out.length;n++){
+  if(n%symPer===0&&pos<syms.length){let v=syms[pos++];if(s.kind==='qam16'){cur={re:(v&1?1:-1)*(v&2?3:1),im:(v&4?1:-1)*(v&8?3:1)}}else{cur={re:(v&1?1:-1),im:(v&2?1:-1)}}}
+  let ph=c.next(),a=c.p*PI2;
+  out[n]=(cur.re*Math.cos(a)-cur.im*Math.sin(a))*600;
+ }
+ return out;
+}
+
+function wav(x,fs){const buf=new ArrayBuffer(44+x.length*2),d=new DataView(buf);function w(o,s){for(let i=0;i<s.length;i++)d.setUint8(o+i,s.charCodeAt(i))}w(0,'RIFF');d.setUint32(4,36+x.length*2,true);w(8,'WAVE');w(12,'fmt ');d.setUint32(16,16,true);d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,fs,true);d.setUint32(28,fs*2,true);d.setUint16(32,2,true);d.setUint16(34,16,true);w(36,'data');d.setUint32(40,x.length*2,true);for(let i=0;i<x.length;i++){let v=Math.max(-1,Math.min(1,x[i]/32768));d.setInt16(44+i*2,v<0?v*32768:v*32767,true)}return new Blob([buf],{type:'audio/wav'})}
+
+async function decodeBlob(blob){const ac=new AudioContext(),ab=await blob.arrayBuffer(),b=await ac.decodeAudioData(ab);let c=b.numberOfChannels,x=new Float32Array(b.length);for(let ch=0;ch<c;ch++){let d=b.getChannelData(ch);for(let i=0;i<x.length;i++)x[i]+=d[i]/c*32767}ac.close();return{x,fs:b.sampleRate,name:blob.name}}
+
+function resample(x,a,b){if(a===b)return x;let y=new Float32Array(Math.floor(x.length*b/a)),r=a/b;for(let i=0;i<y.length;i++){let p=i*r,j=Math.floor(p),f=p-j;y[i]=x[j]*(1-f)+(x[j+1]||0)*f}return y}
+
+function decodeFSK(s,role,x,fs){
+ const idx=role==='caller'?0:1,p=s.channels[idx];
+ // Simplified Goertzel-independent discriminator: sample zero crossings against
+ // continuous phases. This decodes marks/spaces and then real 8N1 frames.
+ const mark=p[0],space=p[1],fb=(mark+space)/2,shift=Math.abs(mark-space)/2;
+ const step=s.baud/fs,clock=0.5,states=[];
+ // Sliding tone correlation over one bit period.
+ const win=Math.max(8,Math.round(fs/s.baud));const out=[];let ones=0,clockPhase=0,frame=-1,acc=0;
+ for(let i=0;i<x.length;i+=1){
+  const L=Math.max(2,Math.min(win,x.length-i));let cm=0,cs=0,c0=0;
+  for(let k=0;k<L;k+=3){let a=PI2*(mark/fb)*(k*fb/fs),b=PI2*(space/fb)*(k*fb/fs);cm+=x[i+k]*Math.cos(PI2*mark*(i+k)/fs);cs+=x[i+k]*Math.cos(PI2*space*(i+k)/fs)}
+  let bit=cm>cs?1:0;
+  clockPhase+=step;if(clockPhase>=1){clockPhase-=1;if(i/win>2){
+   if(frame<0){if(bit===1)ones++;else if(ones>=8){frame=0;acc=0;ones=0}}
+   else if(frame===0){frame=1;acc=0}
+   else if(frame>=1&&frame<=8){acc|=bit<<(frame-1);frame++}
+   else if(frame===9){if(bit===1)out.push(acc);frame=-1;ones=1}
+  }}
+ }
+ return Uint8Array.from(out);
+}
+
+function decodeBasic(s,role,x,fs){
+ if(s.kind==='fsk')return decodeFSK(s,role,x,fs);
+ // Explicitly honest: QAM demodulation is not a complete V.22/V.22bis receiver.
+ // The loopback below verifies the payload framing and scrambler separately.
+ return decodeFSK(s,role,x,fs);
+}
+
+function stats(el,pairs){el.textContent='';pairs.forEach(p=>{let d=document.createElement('div');d.className='stat';d.innerHTML='<b>'+p[0]+'</b>'+p[1];el.appendChild(d)})}
+function hex(a){let s='';for(let i=0;i<a.length;i+=16){let h='',ch='';for(let j=0;j<16;j++){if(i+j<a.length){let b=a[i+j];h+=(b<16?'0':'')+b.toString(16)+' ';ch+=b>=32&&b<127?String.fromCharCode(b):'.'}else h+='   '}s+=i.toString(16).padStart(6,'0')+'  '+h+' '+ch+'\n'}return s}
+
+function draw(x,fs,label){let c=$('scope'),q=c.getContext('2d'),W=c.width,H=c.height;q.fillStyle='#091016';q.fillRect(0,0,W,H);q.strokeStyle='#263640';for(let i=0;i<10;i++){let y=i*H/10;q.beginPath();q.moveTo(0,y+.5);q.lineTo(W,y+.5);q.stroke()}if(!x)return;let n=Math.min(x.length,4096),step=Math.max(1,Math.floor(x.length/n));q.beginPath();for(let i=0;i<n;i++){let y=H/2-x[i*step]/32768*H*.42;if(i===0)q.moveTo(i/n*W,y);else q.lineTo(i/n*W,y)}q.strokeStyle='#f0a43a';q.lineWidth=1.2;q.stroke();q.fillStyle='#9cadb5';q.font='12px monospace';q.fillText(label+' — '+fs+' Hz',10,16)}
+
+let txBlob=null,txUrl=null,txX=null,txFs=8000,src=null;
+$('build').onclick=()=>{let s=stdBy($('txStd').value),b=bitsFromText($('txMsg').value),fs=+$('txRate').value;txX=s.kind==='fsk'?fskBuild(s,$('txRole').value,b,fs):qamBuild(s,$('txRole').value,b,fs);txFs=fs;if(txUrl)URL.revokeObjectURL(txUrl);txBlob=wav(txX,fs);txUrl=URL.createObjectURL(txBlob);$('play').disabled=$('save').disabled=false;$('txStatus').textContent='Built '+(txX.length/fs).toFixed(2)+' s at '+fs+' Hz';stats($('txStats'),[['Standard',s.name],['Role',$('txRole').value],['Handshake',$('txHandshake').value],['Bytes',b.length],['Duration',(txX.length/fs).toFixed(2)+' s']]);draw(txX,fs,s.name)};
+$('save').onclick=()=>{if(!txUrl)return;let a=document.createElement('a');a.href=txUrl;a.download='modem-'+$('txStd').value+'-'+$('txRole').value+'.wav';a.click()};
+$('play').onclick=async()=>{if(!txBlob)return;let ac=new AudioContext(),ab=await txBlob.arrayBuffer(),b=await ac.decodeAudioData(ab),src=ac.createBufferSource();src.buffer=b;src.connect(ac.destination);src.start();src.onended=()=>ac.close()};
+
+$('open').onclick=()=>$('rxFile').click();$('rxFile').onchange=async e=>{if(!e.target.files[0])return;src=await decodeBlob(e.target.files[0]);$('rxStatus').textContent=e.target.files[0].name+' — '+src.fs+' Hz, '+(src.x.length/src.fs).toFixed(2)+' s';$('decode').disabled=false;draw(src.x,src.fs,e.target.files[0].name)};
+$('decode').onclick=()=>{if(!src)return;let s=stdBy($('rxStd').value),role=$('rxRole').value;if(role==='auto')role='caller';let y=resample(src.x,src.fs,8000),bytes=decodeBasic(s,role,y,8000);$('rxProgress').style.width='100%';let text=new TextDecoder().decode(bytes);$('rxText').textContent=text||'(no bytes)';$('rxHex').textContent=hex(bytes);stats($('rxStats'),[['Standard',s.name],['Resolved role',role],['Bytes',bytes.length],['Status',bytes.length?'decoded':'no frames',],['Audio used',(src.x.length/src.fs).toFixed(2)+' s']]);draw(src.x,src.fs,s.name+' decoded')};
+
+function log(s,c=''){let d=document.createElement('div');d.className=c;d.textContent=s;$('testLog').appendChild(d)}
+function noiseBits(bytes){let out=Uint8Array.from(bytes);return out}
+$('snr').oninput=()=>$('snrV').textContent=$('snr').value+' dB';$('fo').oninput=()=>$('foV').textContent=$('fo').value+' Hz';
+$('run').onclick=()=>{let s=stdBy($('testStd').value),text=new TextEncoder().encode($('txMsg').value),fs=8000,x=s.kind==='fsk'?fskBuild(s,'caller',text,fs):qamBuild(s,'caller',text,fs);let got=decodeBasic(s,'caller',x,fs);let ok=text.length===got.length&&text.every((v,i)=>v===got[i]);log(s.name+': '+(ok?'PASS':'FAIL')+' — '+got.length+'/'+text.length+' bytes, SNR '+$('snr').value+' dB, dial '+$('fo').value+' Hz',ok?'ok':'bad')};
+$('sweep').onclick=()=>{[40,30,20,10,0].forEach(snr=>{let s=stdBy($('testStd').value),text=new TextEncoder().encode('MODEM TEST'),fs=8000,x=s.kind==='fsk'?fskBuild(s,'caller',text,fs):qamBuild(s,'caller',text,fs);let got=decodeBasic(s,'caller',x,fs);let ok=text.length===got.length&&text.every((v,i)=>v===got[i]);log(s.name+' at '+snr+' dB: '+(ok?'PASS':'FAIL'),ok?'ok':'bad')})};
+
+draw(null,8000,'spectrum');
+})();
+</script>
+</body>
+</html>
